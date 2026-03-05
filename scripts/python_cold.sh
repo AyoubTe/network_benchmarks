@@ -31,7 +31,7 @@ for i in $(seq 1 $ITERATIONS); do
     echo "  Creating fresh action..."
     wsk -i action create "$ACTION_NAME" \
         ../python/network_benchmark.py \
-        --kind python:3.9 >/dev/null
+        --kind python:3 >/dev/null
     sleep 2
     
     # Invoke and measure

@@ -23,7 +23,7 @@ echo "Setting up action..."
 wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
 wsk -i action create "$ACTION_NAME" \
     ../python/network_benchmark.py \
-    --kind python:3.9 >/dev/null
+    --kind python:3 >/dev/null
 
 # Warm up with one invocation
 echo "Warming up action..."

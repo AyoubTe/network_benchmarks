@@ -8,7 +8,7 @@ echo "Deploying Python benchmark..."
 wsk -i action delete network-bench-python 2>/dev/null || true
 wsk -i action create network-bench-python \
     python/network_benchmark.py \
-    --kind python:3.9
+    --kind python:3
 
 # JavaScript
 echo "Deploying JavaScript benchmark..."
