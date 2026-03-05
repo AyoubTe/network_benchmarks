@@ -1,0 +1,12 @@
+{
+  "name": "network-benchmark",
+  "version": "1.0.0",
+  "description": "Network benchmarks for serverless functions",
+  "main": "network_benchmark.js",
+  "scripts": {
+    "test": "node network_benchmark.js"
+  },
+  "keywords": ["benchmark", "network", "serverless"],
+  "author": "Ayoub SAMI",
+  "license": "MIT"
+}
