@@ -37,7 +37,7 @@ for i in $(seq 1 $ITERATIONS); do
     if [ -n "$POD_NAME" ]; then
         echo "  Deleting pod: $POD_NAME"
         kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0
-        sleep 10
+        sleep 30
     else
         echo "  No existing pod found (first run)"
     fi
@@ -58,7 +58,7 @@ for i in $(seq 1 $ITERATIONS); do
     echo "  Invoking action..."
     
     START_TIME=$(date +%s%N)
-    wsk -i action invoke "$ACTION_NAME" --result --blocking --result-timeout 120000 > "$RESULT_FILE"
+    wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE"
     END_TIME=$(date +%s%N)
     
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
