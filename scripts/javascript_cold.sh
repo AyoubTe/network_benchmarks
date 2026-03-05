@@ -28,7 +28,7 @@ for i in $(seq 1 $ITERATIONS); do
     if [ -n "$POD_NAME" ]; then
         echo "  Deleting pod: $POD_NAME"
         kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0
-        sleep 10
+        sleep 30
     else
         echo "  No existing pod found (first run)"
     fi
