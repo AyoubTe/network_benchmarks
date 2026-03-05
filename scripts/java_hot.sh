@@ -41,6 +41,10 @@ wsk -i action invoke "$ACTION_NAME" --result >/dev/null
 sleep 3
 echo ""
 
+POD_NAME=$(kubectl get pods -n openwhisk | grep "networkbenchjava" | awk '{print $1}' | head -1)
+echo "Using pod: $POD_NAME"
+echo ""
+
 for i in $(seq 1 $ITERATIONS); do
     echo "Iteration $i/$ITERATIONS (HOT START)"
     echo "----------------------------------------"
@@ -63,7 +67,8 @@ for i in $(seq 1 $ITERATIONS); do
         cold_start: false,
         language: \"java\",
         timestamp: \"$TIMESTAMP\",
-        hostname: \"$(hostname)\"
+        hostname: \"$(hostname)\",
+        pod_name: \"$POD_NAME\"
     }" "$RESULT_FILE" > "$TMP_FILE"
     mv "$TMP_FILE" "$RESULT_FILE"
     
@@ -79,4 +84,5 @@ echo "========================================"
 echo "JAVA HOT START - Complete!"
 echo "Results in: $OUTPUT_DIR"
 echo "Total files: $(ls -1 $OUTPUT_DIR | wc -l)"
+echo "Final pod: $(kubectl get pods -n openwhisk | grep networkbenchjava | awk '{print $1}')"
 echo "========================================"

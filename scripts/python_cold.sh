@@ -22,16 +22,25 @@ for i in $(seq 1 $ITERATIONS); do
     echo "Iteration $i/$ITERATIONS (COLD START)"
     echo "----------------------------------------"
     
-    # Delete action to ensure cold start
-    echo "  Deleting action to force cold start..."
-    wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
-    sleep 3
+    # Find and delete the specific pod for this action
+    echo "  Finding and deleting pod for $ACTION_NAME..."
+    POD_NAME=$(kubectl get pods -n openwhisk | grep "networkbenchpython" | awk '{print $1}' | head -1)
+    if [ -n "$POD_NAME" ]; then
+        echo "  Deleting pod: $POD_NAME"
+        kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0
+        sleep 3
+    else
+        echo "  No existing pod found (first run)"
+    fi
     
-    # Recreate action
-    echo "  Creating fresh action..."
-    wsk -i action create "$ACTION_NAME" \
-        ../python/network_benchmark.py \
-        --kind python:3 >/dev/null
+    # Ensure action exists
+    wsk -i action get "$ACTION_NAME" >/dev/null 2>&1 || {
+        echo "  Creating action..."
+        wsk -i action create "$ACTION_NAME" \
+            ../python/network_benchmark.py \
+            --kind python:3 >/dev/null
+    }
+    
     sleep 2
     
     # Invoke and measure
