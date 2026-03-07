@@ -73,25 +73,35 @@ log "✓ Old results cleaned"
 echo ""
 
 # Ensure all actions use the updated code
-log "Updating all OpenWhisk actions with latest code..."
+log "Deploy all OpenWhisk actions..."
 
-# Update Python
-log_info "Updating Python action..."
-wsk -i action update network-bench-python ../python/network_benchmark_fixed.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
+# Python
+echo "Deploying Python benchmark..."
+wsk -i action delete network-bench-python 2>/dev/null || true
+wsk -i action create network-bench-python \
+    ./../python/network_benchmark.py \
+    --kind python:3
 
-# Update JavaScript
-log_info "Updating JavaScript action..."
-wsk -i action update network-bench-js ../javascript/network_benchmark_fixed.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
+# JavaScript
+echo "Deploying JavaScript benchmark..."
+wsk -i action delete network-bench-js 2>/dev/null || true
+wsk -i action create network-bench-js \
+    ./../javascript/network_benchmark.js \
+    --kind nodejs:14
 
-# Update Java (rebuild first)
-log_info "Rebuilding and updating Java action..."
-cd ../java
-mvn clean package -q 2>&1 | tee -a "$LOG_FILE"
-cd ../scripts
-wsk -i action update network-bench-java ../java/target/network-benchmark-1.0.jar --main NetworkBenchmark --kind java:8 2>&1 | tee -a "$LOG_FILE"
 
-log "✓ All actions updated"
-echo ""
+# Java
+echo "Deploying Java benchmark..."
+echo "  Building Java JAR with Maven..."
+cd ./../java
+mvn clean package -q
+cd ./../scripts
+
+wsk -i action delete network-bench-java 2>/dev/null || true
+wsk -i action create network-bench-java \
+    ./../java/target/network-benchmark-1.0.jar \
+    --main NetworkBenchmark \
+    --kind java:8
 
 wait_with_countdown 30 "Allowing system to stabilize after updates..."
 
