@@ -133,7 +133,7 @@ for i in $(seq 1 $ITERATIONS); do
     # Ensure action exists
     wsk -i action get "$ACTION_NAME" >/dev/null 2>&1 || {
         log_info "Creating action..."
-        wsk -i action create "$ACTION_NAME" ../python/network_benchmark_fixed.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
+        wsk -i action create "$ACTION_NAME" ../python/network_benchmark.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
     }
 
     # Invoke
@@ -185,7 +185,7 @@ mkdir -p "$OUTPUT_DIR"
 
 # Setup action
 wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
-wsk -i action create "$ACTION_NAME" ../python/network_benchmark_fixed.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
+wsk -i action create "$ACTION_NAME" ../python/network_benchmark.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
 
 # Warmup
 log_info "Warming up action..."
@@ -260,7 +260,7 @@ for i in $(seq 1 $ITERATIONS); do
 
     wsk -i action get "$ACTION_NAME" >/dev/null 2>&1 || {
         log_info "Creating action..."
-        wsk -i action create "$ACTION_NAME" ../javascript/network_benchmark_fixed.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
+        wsk -i action create "$ACTION_NAME" ../javascript/network_benchmark.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
     }
 
     RESULT_FILE="$OUTPUT_DIR/javascript_cold_${MASTER_TIMESTAMP}_iter${i}.json"
@@ -308,7 +308,7 @@ OUTPUT_DIR="./results_javascript_hot"
 mkdir -p "$OUTPUT_DIR"
 
 wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
-wsk -i action create "$ACTION_NAME" ../javascript/network_benchmark_fixed.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
+wsk -i action create "$ACTION_NAME" ../javascript/network_benchmark.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
 
 log_info "Warming up action..."
 wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
