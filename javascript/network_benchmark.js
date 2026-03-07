@@ -1,6 +1,6 @@
 /**
  * Network Benchmark for Serverless Functions (Node.js)
- * Commonly used metrics in serverless research papers
+ * Updated with new bandwidth test URL
  */
 
 const http = require('http');
@@ -8,9 +8,6 @@ const https = require('https');
 const dns = require('dns').promises;
 const net = require('net');
 
-/**
- * TCP Connection Latency Benchmark
- */
 async function benchmarkTcpLatency(host = '8.8.8.8', port = 53, iterations = 10) {
     const latencies = [];
     
@@ -55,9 +52,6 @@ async function benchmarkTcpLatency(host = '8.8.8.8', port = 53, iterations = 10)
     };
 }
 
-/**
- * HTTP Request Latency Benchmark
- */
 async function benchmarkHttpLatency(url = 'http://httpbin.org/get', iterations = 10) {
     const latencies = [];
     
@@ -103,9 +97,6 @@ async function benchmarkHttpLatency(url = 'http://httpbin.org/get', iterations =
     };
 }
 
-/**
- * DNS Resolution Latency Benchmark
- */
 async function benchmarkDnsResolution(domain = 'google.com', iterations = 10) {
     const latencies = [];
     
@@ -136,11 +127,9 @@ async function benchmarkDnsResolution(domain = 'google.com', iterations = 10) {
     };
 }
 
-/**
- * Bandwidth Benchmark
- */
-async function benchmarkBandwidth(url = 'http://speedtest.ftp.otenet.gr/files/test1Mb.db', sizeMb = 1) {
+async function benchmarkBandwidth(url = 'https://hagimont.freeboxos.fr/hagimont/software/resteasy-jaxrs-3.0.9.Final-all.zip') {
     const downloadTimes = [];
+    let fileSizeMb = null;
     
     for (let i = 0; i < 3; i++) {
         const start = Date.now();
@@ -160,19 +149,27 @@ async function benchmarkBandwidth(url = 'http://speedtest.ftp.otenet.gr/files/te
             const downloadTime = (Date.now() - start) / 1000; // Convert to seconds
             downloadTimes.push(downloadTime);
             
+            // Calculate file size
+            const sizeBytes = data.length;
+            fileSizeMb = sizeBytes / (1024 * 1024);
+            
         } catch (error) {
             console.error(`Download failed: ${error.message}`);
-            return { error: error.message };
+            return { 
+                metric: 'bandwidth',
+                url,
+                error: error.message 
+            };
         }
     }
     
     const avgTime = downloadTimes.reduce((a, b) => a + b, 0) / downloadTimes.length;
-    const avgBandwidth = (sizeMb * 8) / avgTime; // Mbps
+    const avgBandwidth = (fileSizeMb * 8) / avgTime; // Mbps
     
     return {
         metric: 'bandwidth',
         url,
-        size_mb: sizeMb,
+        file_size_mb: Math.round(fileSizeMb * 100) / 100,
         download_times_s: downloadTimes,
         avg_download_time_s: avgTime,
         bandwidth_mbps: avgBandwidth,
@@ -181,9 +178,6 @@ async function benchmarkBandwidth(url = 'http://speedtest.ftp.otenet.gr/files/te
     };
 }
 
-/**
- * Calculate Standard Deviation
- */
 function calculateStdDev(values) {
     const avg = values.reduce((a, b) => a + b, 0) / values.length;
     const squareDiffs = values.map(value => Math.pow(value - avg, 2));
@@ -191,9 +185,6 @@ function calculateStdDev(values) {
     return Math.sqrt(avgSquareDiff);
 }
 
-/**
- * Run all benchmarks
- */
 async function runAllBenchmarks() {
     const results = {
         timestamp: Date.now(),
@@ -215,14 +206,10 @@ async function runAllBenchmarks() {
     return results;
 }
 
-/**
- * OpenWhisk Action Handler
- */
 async function main(params) {
     return await runAllBenchmarks();
 }
 
-// For local testing
 if (require.main === module) {
     runAllBenchmarks().then(results => {
         console.log(JSON.stringify(results, null, 2));

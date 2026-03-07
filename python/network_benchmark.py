@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 """
 Network Benchmark for Serverless Functions
-Commonly used metrics in serverless research papers
+Updated with new bandwidth test URL
 """
 import time
 import socket
-import http.client
 import json
 import statistics
 from urllib.request import urlopen
 from urllib.error import URLError
 
 def benchmark_tcp_latency(host="8.8.8.8", port=53, iterations=10):
-    """
-    TCP Connection Latency Benchmark
-    Measures time to establish TCP connection
-    """
+    """TCP Connection Latency Benchmark"""
     latencies = []
     
     for i in range(iterations):
@@ -25,7 +21,7 @@ def benchmark_tcp_latency(host="8.8.8.8", port=53, iterations=10):
             sock.settimeout(5)
             sock.connect((host, port))
             sock.close()
-            latency = (time.time() - start) * 1000  # Convert to ms
+            latency = (time.time() - start) * 1000
             latencies.append(latency)
         except Exception as e:
             print(f"Connection failed: {e}")
@@ -47,10 +43,7 @@ def benchmark_tcp_latency(host="8.8.8.8", port=53, iterations=10):
     }
 
 def benchmark_http_latency(url="http://httpbin.org/get", iterations=10):
-    """
-    HTTP Request Latency Benchmark
-    Measures end-to-end HTTP request time
-    """
+    """HTTP Request Latency Benchmark"""
     latencies = []
     
     for i in range(iterations):
@@ -78,12 +71,13 @@ def benchmark_http_latency(url="http://httpbin.org/get", iterations=10):
         "stdev_ms": statistics.stdev(valid_latencies) if len(valid_latencies) > 1 else 0
     }
 
-def benchmark_bandwidth(url="http://speedtest.ftp.otenet.gr/files/test1Mb.db", size_mb=1):
+def benchmark_bandwidth(url="https://hagimont.freeboxos.fr/hagimont/software/resteasy-jaxrs-3.0.9.Final-all.zip"):
     """
     Bandwidth Benchmark
-    Measures download speed
+    Downloads file and measures throughput
     """
     download_times = []
+    file_size_mb = None
     
     for i in range(3):
         start = time.time()
@@ -93,21 +87,25 @@ def benchmark_bandwidth(url="http://speedtest.ftp.otenet.gr/files/test1Mb.db", s
             download_time = time.time() - start
             download_times.append(download_time)
             
-            # Calculate bandwidth in Mbps
+            # Calculate actual file size
             size_bytes = len(data)
-            bandwidth_mbps = (size_bytes * 8) / (download_time * 1000000)
+            file_size_mb = size_bytes / (1024 * 1024)
             
         except URLError as e:
             print(f"Download failed: {e}")
-            return {"error": str(e)}
+            return {
+                "metric": "bandwidth",
+                "url": url,
+                "error": str(e)
+            }
     
     avg_time = statistics.mean(download_times)
-    avg_bandwidth = (size_mb * 8) / avg_time
+    avg_bandwidth = (file_size_mb * 8) / avg_time  # Mbps
     
     return {
         "metric": "bandwidth",
         "url": url,
-        "size_mb": size_mb,
+        "file_size_mb": round(file_size_mb, 2) if file_size_mb else 0,
         "download_times_s": download_times,
         "avg_download_time_s": avg_time,
         "bandwidth_mbps": avg_bandwidth,
@@ -116,10 +114,7 @@ def benchmark_bandwidth(url="http://speedtest.ftp.otenet.gr/files/test1Mb.db", s
     }
 
 def benchmark_dns_resolution(domain="google.com", iterations=10):
-    """
-    DNS Resolution Latency
-    Measures DNS lookup time
-    """
+    """DNS Resolution Latency"""
     latencies = []
     
     for i in range(iterations):
@@ -146,9 +141,7 @@ def benchmark_dns_resolution(domain="google.com", iterations=10):
     }
 
 def run_all_benchmarks():
-    """
-    OpenWhisk Action Handler - runs all network benchmarks
-    """
+    """Run all network benchmarks"""
     results = {
         "timestamp": time.time(),
         "benchmarks": {}
@@ -169,12 +162,9 @@ def run_all_benchmarks():
     return results
 
 def main(args):
-    """
-    OpenWhisk entry point
-    """
+    """OpenWhisk entry point"""
     return run_all_benchmarks()
 
 if __name__ == "__main__":
-    # For local testing
     results = run_all_benchmarks()
     print(json.dumps(results, indent=2))

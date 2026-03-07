@@ -1,20 +1,25 @@
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import com.google.gson.JsonObject;
-import com.google.gson.Gson;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
-/**
- * Network Benchmark for Serverless Functions (Java)
- * Commonly used metrics in serverless research papers
- */
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+
 public class NetworkBenchmark {
     
     private static final Gson gson = new Gson();
     
-    /**
-     * TCP Connection Latency Benchmark
-     */
     public static JsonObject benchmarkTcpLatency(String host, int port, int iterations) {
         List<Long> latencies = new ArrayList<>();
         
@@ -54,9 +59,6 @@ public class NetworkBenchmark {
         return result;
     }
     
-    /**
-     * HTTP Request Latency Benchmark
-     */
     public static JsonObject benchmarkHttpLatency(String urlString, int iterations) {
         List<Long> latencies = new ArrayList<>();
         
@@ -114,9 +116,6 @@ public class NetworkBenchmark {
         return result;
     }
     
-    /**
-     * DNS Resolution Latency Benchmark
-     */
     public static JsonObject benchmarkDnsResolution(String domain, int iterations) {
         List<Long> latencies = new ArrayList<>();
         
@@ -154,11 +153,9 @@ public class NetworkBenchmark {
         return result;
     }
     
-    /**
-     * Bandwidth Benchmark
-     */
-    public static JsonObject benchmarkBandwidth(String urlString, double sizeMb) {
+    public static JsonObject benchmarkBandwidth(String urlString) {
         List<Double> downloadTimes = new ArrayList<>();
+        double fileSizeMb = 0;
         
         for (int i = 0; i < 3; i++) {
             long start = System.currentTimeMillis();
@@ -185,9 +182,15 @@ public class NetworkBenchmark {
                 double downloadTime = (System.currentTimeMillis() - start) / 1000.0;
                 downloadTimes.add(downloadTime);
                 
+                // Calculate file size
+                long sizeBytes = out.size();
+                fileSizeMb = sizeBytes / (1024.0 * 1024.0);
+                
             } catch (IOException e) {
                 System.err.println("Download failed: " + e.getMessage());
                 JsonObject error = new JsonObject();
+                error.addProperty("metric", "bandwidth");
+                error.addProperty("url", urlString);
                 error.addProperty("error", e.getMessage());
                 return error;
             }
@@ -197,12 +200,12 @@ public class NetworkBenchmark {
             .mapToDouble(Double::doubleValue)
             .average()
             .orElse(0.0);
-        double avgBandwidth = (sizeMb * 8) / avgTime;
+        double avgBandwidth = (fileSizeMb * 8) / avgTime;
         
         JsonObject result = new JsonObject();
         result.addProperty("metric", "bandwidth");
         result.addProperty("url", urlString);
-        result.addProperty("size_mb", sizeMb);
+        result.addProperty("file_size_mb", Math.round(fileSizeMb * 100.0) / 100.0);
         result.add("download_times_s", gson.toJsonTree(downloadTimes));
         result.addProperty("avg_download_time_s", avgTime);
         result.addProperty("bandwidth_mbps", avgBandwidth);
@@ -212,9 +215,6 @@ public class NetworkBenchmark {
         return result;
     }
     
-    /**
-     * Calculate Average
-     */
     private static double calculateAverage(List<Long> values) {
         return values.stream()
             .mapToLong(Long::longValue)
@@ -222,9 +222,6 @@ public class NetworkBenchmark {
             .orElse(0.0);
     }
     
-    /**
-     * Calculate Median
-     */
     private static long calculateMedian(List<Long> values) {
         List<Long> sorted = new ArrayList<>(values);
         Collections.sort(sorted);
@@ -237,9 +234,6 @@ public class NetworkBenchmark {
         }
     }
     
-    /**
-     * Calculate Standard Deviation
-     */
     private static double calculateStdDev(List<Long> values) {
         double avg = calculateAverage(values);
         double sumSquaredDiff = values.stream()
@@ -248,9 +242,6 @@ public class NetworkBenchmark {
         return Math.sqrt(sumSquaredDiff / values.size());
     }
     
-    /**
-     * Run all benchmarks
-     */
     public static JsonObject runAllBenchmarks() {
         JsonObject results = new JsonObject();
         results.addProperty("timestamp", System.currentTimeMillis());
@@ -267,23 +258,17 @@ public class NetworkBenchmark {
         benchmarks.add("dns_resolution", benchmarkDnsResolution("google.com", 10));
         
         System.out.println("Running Bandwidth Benchmark...");
-        benchmarks.add("bandwidth", benchmarkBandwidth("http://speedtest.ftp.otenet.gr/files/test1Mb.db", 1.0));
+        benchmarks.add("bandwidth", benchmarkBandwidth("https://hagimont.freeboxos.fr/hagimont/software/resteasy-jaxrs-3.0.9.Final-all.zip"));
         
         results.add("benchmarks", benchmarks);
         
         return results;
     }
     
-    /**
-     * OpenWhisk Action Handler
-     */
     public static JsonObject main(JsonObject args) {
         return runAllBenchmarks();
     }
     
-    /**
-     * Main method for local testing
-     */
     public static void main(String[] args) {
         JsonObject results = runAllBenchmarks();
         System.out.println(gson.toJson(results));
