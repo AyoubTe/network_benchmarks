@@ -52,12 +52,12 @@ log_info() {
 wait_with_countdown() {
     local seconds=$1
     local message=$2
-
+    
     log_info "$message"
-
-    for ((i=$seconds; i>0; i--)); do
-        if [ $i -eq 60 ] || [ $i -eq 30 ] || [ $i -eq 10 ] || [ $i -le 5 ]; then
-            printf "${YELLOW}  Waiting... %d seconds remaining${NC}\n" $i
+    
+    for ((j=$seconds; j>0; j--)); do
+        if [ $j -eq 60 ] || [ $j -eq 30 ] || [ $j -eq 10 ] || [ $j -le 5 ]; then
+            printf "${YELLOW}  Waiting... %d seconds remaining${NC}\n" $j
         fi
         sleep 1
     done
@@ -71,37 +71,6 @@ rm -rf ./results_javascript_cold ./results_javascript_hot
 rm -rf ./results_java_cold ./results_java_hot
 log "✓ Old results cleaned"
 echo ""
-
-# Ensure all actions use the updated code
-log "Deploy all OpenWhisk actions..."
-
-# Python
-echo "Deploying Python benchmark..."
-wsk -i action delete network-bench-python 2>/dev/null || true
-wsk -i action create network-bench-python \
-    ./../python/network_benchmark.py \
-    --kind python:3
-
-# JavaScript
-echo "Deploying JavaScript benchmark..."
-wsk -i action delete network-bench-js 2>/dev/null || true
-wsk -i action create network-bench-js \
-    ./../javascript/network_benchmark.js \
-    --kind nodejs:14
-
-
-# Java
-echo "Deploying Java benchmark..."
-echo "  Building Java JAR with Maven..."
-cd ./../java
-mvn clean package -q
-cd ./../scripts
-
-wsk -i action delete network-bench-java 2>/dev/null || true
-wsk -i action create network-bench-java \
-    ./../java/target/network-benchmark-1.0.jar \
-    --main NetworkBenchmark \
-    --kind java:8
 
 wait_with_countdown 30 "Allowing system to stabilize after updates..."
 
@@ -117,9 +86,9 @@ ITERATIONS=5
 ACTION_NAME="network-bench-python"
 mkdir -p "$OUTPUT_DIR"
 
-for i in $(seq 1 $ITERATIONS); do
-    log "Python Cold - Iteration $i/$ITERATIONS"
-
+for iter_num in $(seq 1 $ITERATIONS); do
+    log "Python Cold - Iteration $iter_num/$ITERATIONS"
+    
     # Delete pod
     POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchpython" | awk '{print $1}' | head -1)
     if [ -n "$POD_NAME" ]; then
@@ -129,41 +98,48 @@ for i in $(seq 1 $ITERATIONS); do
     else
         log_warning "No existing pod found"
     fi
-
-    # Ensure action exists
-    wsk -i action get "$ACTION_NAME" >/dev/null 2>&1 || {
-        log_info "Creating action..."
-        wsk -i action create "$ACTION_NAME" ../python/network_benchmark.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
-    }
-
+    
     # Invoke
-    RESULT_FILE="$OUTPUT_DIR/python_cold_${MASTER_TIMESTAMP}_iter${i}.json"
+    RESULT_FILE="$OUTPUT_DIR/python_cold_${MASTER_TIMESTAMP}_iter${iter_num}.json"
+    log_info "DEBUG: Iteration variable = $iter_num, Target file = $RESULT_FILE"
+    
     START_TIME=$(date +%s%N)
     wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE" 2>&1
     END_TIME=$(date +%s%N)
-
+    
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
-    # Add metadata
-    TMP_FILE=$(mktemp)
-    jq ". + {
-        invocation_time_s: $INVOCATION_TIME,
-        iteration: $i,
+    
+    # Add metadata - use unique temp file
+    TMP_FILE="/tmp/py_cold_${iter_num}_${MASTER_TIMESTAMP}.json"
+    jq --arg invtime "$INVOCATION_TIME" \
+       --arg iteration "$iter_num" \
+       --arg timestamp "$MASTER_TIMESTAMP" \
+       --arg host "$(hostname)" \
+       '. + {
+        invocation_time_s: ($invtime | tonumber),
+        iteration: ($iteration | tonumber),
         cold_start: true,
-        language: \"python\",
-        master_timestamp: \"$MASTER_TIMESTAMP\",
-        hostname: \"$(hostname)\"
-    }" "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
-    mv "$TMP_FILE" "$RESULT_FILE"
-
-    log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
-
-    if [ $i -lt $ITERATIONS ]; then
+        language: "python",
+        master_timestamp: $timestamp,
+        hostname: $host
+    }' "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
+    
+    if [ -f "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$RESULT_FILE"
+        log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
+    else
+        log_error "Failed to add metadata to $RESULT_FILE"
+    fi
+    
+    if [ $iter_num -lt $ITERATIONS ]; then
         wait_with_countdown $COLD_START_ITERATION_WAIT "Waiting before next iteration..."
     fi
 done
 
-log "✓ Python Cold Start Complete"
+echo "Wait 1 min before detroying the pod..."
+sleep 60
+
+log "✓ Python Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
 # Clean up pod
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchpython" | awk '{print $1}' | head -1)
@@ -183,10 +159,6 @@ log "=========================================="
 OUTPUT_DIR="./results_python_hot"
 mkdir -p "$OUTPUT_DIR"
 
-# Setup action
-wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
-wsk -i action create "$ACTION_NAME" ../python/network_benchmark.py --kind python:3 2>&1 | tee -a "$LOG_FILE"
-
 # Warmup
 log_info "Warming up action..."
 wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
@@ -196,36 +168,47 @@ log_info "Waiting 2 mins after warming up..."
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchpython" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
 
-for i in $(seq 1 $ITERATIONS); do
-    log "Python Hot - Iteration $i/$ITERATIONS"
-
-    RESULT_FILE="$OUTPUT_DIR/python_hot_${MASTER_TIMESTAMP}_iter${i}.json"
+for iter_num in $(seq 1 $ITERATIONS); do
+    log "Python Hot - Iteration $iter_num/$ITERATIONS"
+    
+    RESULT_FILE="$OUTPUT_DIR/python_hot_${MASTER_TIMESTAMP}_iter${iter_num}.json"
+    log_info "DEBUG: Iteration variable = $iter_num, Target file = $RESULT_FILE"
+    
     START_TIME=$(date +%s%N)
     wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE" 2>&1
     END_TIME=$(date +%s%N)
-
+    
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
-    TMP_FILE=$(mktemp)
-    jq ". + {
-        invocation_time_s: $INVOCATION_TIME,
-        iteration: $i,
+    
+    TMP_FILE="/tmp/py_hot_${iter_num}_${MASTER_TIMESTAMP}.json"
+    jq --arg invtime "$INVOCATION_TIME" \
+       --arg iteration "$iter_num" \
+       --arg timestamp "$MASTER_TIMESTAMP" \
+       --arg host "$(hostname)" \
+       --arg pod "$POD_NAME" \
+       '. + {
+        invocation_time_s: ($invtime | tonumber),
+        iteration: ($iteration | tonumber),
         cold_start: false,
-        language: \"python\",
-        master_timestamp: \"$MASTER_TIMESTAMP\",
-        hostname: \"$(hostname)\",
-        pod_name: \"$POD_NAME\"
-    }" "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
-    mv "$TMP_FILE" "$RESULT_FILE"
-
-    log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
-
-    if [ $i -lt $ITERATIONS ]; then
+        language: "python",
+        master_timestamp: $timestamp,
+        hostname: $host,
+        pod_name: $pod
+    }' "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
+    
+    if [ -f "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$RESULT_FILE"
+        log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
+    else
+        log_error "Failed to add metadata to $RESULT_FILE"
+    fi
+    
+    if [ $iter_num -lt $ITERATIONS ]; then
         wait_with_countdown $HOT_START_ITERATION_WAIT "Waiting before next hot iteration (2 mins)..."
     fi
 done
 
-log "✓ Python Hot Start Complete"
+log "✓ Python Hot Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
 # Clean up
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchpython" | awk '{print $1}' | head -1)
@@ -246,9 +229,9 @@ OUTPUT_DIR="./results_javascript_cold"
 ACTION_NAME="network-bench-js"
 mkdir -p "$OUTPUT_DIR"
 
-for i in $(seq 1 $ITERATIONS); do
-    log "JavaScript Cold - Iteration $i/$ITERATIONS"
-
+for iter_num in $(seq 1 $ITERATIONS); do
+    log "JavaScript Cold - Iteration $iter_num/$ITERATIONS"
+    
     POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjs" | awk '{print $1}' | head -1)
     if [ -n "$POD_NAME" ]; then
         log_info "Deleting pod: $POD_NAME"
@@ -257,38 +240,46 @@ for i in $(seq 1 $ITERATIONS); do
     else
         log_warning "No existing pod found"
     fi
-
-    wsk -i action get "$ACTION_NAME" >/dev/null 2>&1 || {
-        log_info "Creating action..."
-        wsk -i action create "$ACTION_NAME" ../javascript/network_benchmark.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
-    }
-
-    RESULT_FILE="$OUTPUT_DIR/javascript_cold_${MASTER_TIMESTAMP}_iter${i}.json"
+    
+    RESULT_FILE="$OUTPUT_DIR/javascript_cold_${MASTER_TIMESTAMP}_iter${iter_num}.json"
+    log_info "DEBUG: Iteration variable = $iter_num, Target file = $RESULT_FILE"
+    
     START_TIME=$(date +%s%N)
     wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE" 2>&1
     END_TIME=$(date +%s%N)
-
+    
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
-    TMP_FILE=$(mktemp)
-    jq ". + {
-        invocation_time_s: $INVOCATION_TIME,
-        iteration: $i,
+    
+    TMP_FILE="/tmp/js_cold_${iter_num}_${MASTER_TIMESTAMP}.json"
+    jq --arg invtime "$INVOCATION_TIME" \
+       --arg iteration "$iter_num" \
+       --arg timestamp "$MASTER_TIMESTAMP" \
+       --arg host "$(hostname)" \
+       '. + {
+        invocation_time_s: ($invtime | tonumber),
+        iteration: ($iteration | tonumber),
         cold_start: true,
-        language: \"javascript\",
-        master_timestamp: \"$MASTER_TIMESTAMP\",
-        hostname: \"$(hostname)\"
-    }" "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
-    mv "$TMP_FILE" "$RESULT_FILE"
-
-    log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
-
-    if [ $i -lt $ITERATIONS ]; then
+        language: "javascript",
+        master_timestamp: $timestamp,
+        hostname: $host
+    }' "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
+    
+    if [ -f "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$RESULT_FILE"
+        log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
+    else
+        log_error "Failed to add metadata to $RESULT_FILE"
+    fi
+    
+    if [ $iter_num -lt $ITERATIONS ]; then
         wait_with_countdown $COLD_START_ITERATION_WAIT "Waiting before next iteration..."
     fi
 done
 
-log "✓ JavaScript Cold Start Complete"
+log "✓ JavaScript Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
+
+echo "Wait 1 min before detroying the pod..."
+sleep 60
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjs" | awk '{print $1}' | head -1)
 if [ -n "$POD_NAME" ]; then
@@ -307,9 +298,6 @@ log "=========================================="
 OUTPUT_DIR="./results_javascript_hot"
 mkdir -p "$OUTPUT_DIR"
 
-wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
-wsk -i action create "$ACTION_NAME" ../javascript/network_benchmark.js --kind nodejs:14 2>&1 | tee -a "$LOG_FILE"
-
 log_info "Warming up action..."
 wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
 sleep 120
@@ -318,36 +306,47 @@ log_info "Waiting 2 mins after warming up..."
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjs" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
 
-for i in $(seq 1 $ITERATIONS); do
-    log "JavaScript Hot - Iteration $i/$ITERATIONS"
-
-    RESULT_FILE="$OUTPUT_DIR/javascript_hot_${MASTER_TIMESTAMP}_iter${i}.json"
+for iter_num in $(seq 1 $ITERATIONS); do
+    log "JavaScript Hot - Iteration $iter_num/$ITERATIONS"
+    
+    RESULT_FILE="$OUTPUT_DIR/javascript_hot_${MASTER_TIMESTAMP}_iter${iter_num}.json"
+    log_info "DEBUG: Iteration variable = $iter_num, Target file = $RESULT_FILE"
+    
     START_TIME=$(date +%s%N)
     wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE" 2>&1
     END_TIME=$(date +%s%N)
-
+    
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
-    TMP_FILE=$(mktemp)
-    jq ". + {
-        invocation_time_s: $INVOCATION_TIME,
-        iteration: $i,
+    
+    TMP_FILE="/tmp/js_hot_${iter_num}_${MASTER_TIMESTAMP}.json"
+    jq --arg invtime "$INVOCATION_TIME" \
+       --arg iteration "$iter_num" \
+       --arg timestamp "$MASTER_TIMESTAMP" \
+       --arg host "$(hostname)" \
+       --arg pod "$POD_NAME" \
+       '. + {
+        invocation_time_s: ($invtime | tonumber),
+        iteration: ($iteration | tonumber),
         cold_start: false,
-        language: \"javascript\",
-        master_timestamp: \"$MASTER_TIMESTAMP\",
-        hostname: \"$(hostname)\",
-        pod_name: \"$POD_NAME\"
-    }" "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
-    mv "$TMP_FILE" "$RESULT_FILE"
-
-    log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
-
-    if [ $i -lt $ITERATIONS ]; then
+        language: "javascript",
+        master_timestamp: $timestamp,
+        hostname: $host,
+        pod_name: $pod
+    }' "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
+    
+    if [ -f "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$RESULT_FILE"
+        log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
+    else
+        log_error "Failed to add metadata to $RESULT_FILE"
+    fi
+    
+    if [ $iter_num -lt $ITERATIONS ]; then
         wait_with_countdown $HOT_START_ITERATION_WAIT "Waiting before next hot iteration (2 mins)..."
     fi
 done
 
-log "✓ JavaScript Hot Start Complete"
+log "✓ JavaScript Hot Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjs" | awk '{print $1}' | head -1)
 if [ -n "$POD_NAME" ]; then
@@ -367,9 +366,9 @@ OUTPUT_DIR="./results_java_cold"
 ACTION_NAME="network-bench-java"
 mkdir -p "$OUTPUT_DIR"
 
-for i in $(seq 1 $ITERATIONS); do
-    log "Java Cold - Iteration $i/$ITERATIONS"
-
+for iter_num in $(seq 1 $ITERATIONS); do
+    log "Java Cold - Iteration $iter_num/$ITERATIONS"
+    
     POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
     if [ -n "$POD_NAME" ]; then
         log_info "Deleting pod: $POD_NAME"
@@ -378,38 +377,46 @@ for i in $(seq 1 $ITERATIONS); do
     else
         log_warning "No existing pod found"
     fi
-
-    wsk -i action get "$ACTION_NAME" >/dev/null 2>&1 || {
-        log_info "Creating action..."
-        wsk -i action create "$ACTION_NAME" ../java/target/network-benchmark-1.0.jar --main NetworkBenchmark --kind java:8 2>&1 | tee -a "$LOG_FILE"
-    }
-
-    RESULT_FILE="$OUTPUT_DIR/java_cold_${MASTER_TIMESTAMP}_iter${i}.json"
+    
+    RESULT_FILE="$OUTPUT_DIR/java_cold_${MASTER_TIMESTAMP}_iter${iter_num}.json"
+    log_info "DEBUG: Iteration variable = $iter_num, Target file = $RESULT_FILE"
+    
     START_TIME=$(date +%s%N)
     wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE" 2>&1
     END_TIME=$(date +%s%N)
-
+    
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
-    TMP_FILE=$(mktemp)
-    jq ". + {
-        invocation_time_s: $INVOCATION_TIME,
-        iteration: $i,
+    
+    TMP_FILE="/tmp/java_cold_${iter_num}_${MASTER_TIMESTAMP}.json"
+    jq --arg invtime "$INVOCATION_TIME" \
+       --arg iteration "$iter_num" \
+       --arg timestamp "$MASTER_TIMESTAMP" \
+       --arg host "$(hostname)" \
+       '. + {
+        invocation_time_s: ($invtime | tonumber),
+        iteration: ($iteration | tonumber),
         cold_start: true,
-        language: \"java\",
-        master_timestamp: \"$MASTER_TIMESTAMP\",
-        hostname: \"$(hostname)\"
-    }" "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
-    mv "$TMP_FILE" "$RESULT_FILE"
-
-    log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
-
-    if [ $i -lt $ITERATIONS ]; then
+        language: "java",
+        master_timestamp: $timestamp,
+        hostname: $host
+    }' "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
+    
+    if [ -f "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$RESULT_FILE"
+        log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
+    else
+        log_error "Failed to add metadata to $RESULT_FILE"
+    fi
+    
+    if [ $iter_num -lt $ITERATIONS ]; then
         wait_with_countdown $COLD_START_ITERATION_WAIT "Waiting before next iteration..."
     fi
 done
 
-log "✓ Java Cold Start Complete"
+log "✓ Java Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
+
+echo "Wait 1 min before detroying the pod..."
+sleep 60
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
 if [ -n "$POD_NAME" ]; then
@@ -428,9 +435,6 @@ log "=========================================="
 OUTPUT_DIR="./results_java_hot"
 mkdir -p "$OUTPUT_DIR"
 
-wsk -i action delete "$ACTION_NAME" 2>/dev/null || true
-wsk -i action create "$ACTION_NAME" ../java/target/network-benchmark-1.0.jar --main NetworkBenchmark --kind java:8 2>&1 | tee -a "$LOG_FILE"
-
 log_info "Warming up action (JVM warmup)..."
 wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
 sleep 120
@@ -439,36 +443,47 @@ log_info "Waiting 2 mins after warming up..."
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
 
-for i in $(seq 1 $ITERATIONS); do
-    log "Java Hot - Iteration $i/$ITERATIONS"
-
-    RESULT_FILE="$OUTPUT_DIR/java_hot_${MASTER_TIMESTAMP}_iter${i}.json"
+for iter_num in $(seq 1 $ITERATIONS); do
+    log "Java Hot - Iteration $iter_num/$ITERATIONS"
+    
+    RESULT_FILE="$OUTPUT_DIR/java_hot_${MASTER_TIMESTAMP}_iter${iter_num}.json"
+    log_info "DEBUG: Iteration variable = $iter_num, Target file = $RESULT_FILE"
+    
     START_TIME=$(date +%s%N)
     wsk -i action invoke "$ACTION_NAME" --blocking --result > "$RESULT_FILE" 2>&1
     END_TIME=$(date +%s%N)
-
+    
     INVOCATION_TIME=$(echo "scale=3; ($END_TIME - $START_TIME) / 1000000000" | bc)
-
-    TMP_FILE=$(mktemp)
-    jq ". + {
-        invocation_time_s: $INVOCATION_TIME,
-        iteration: $i,
+    
+    TMP_FILE="/tmp/java_hot_${iter_num}_${MASTER_TIMESTAMP}.json"
+    jq --arg invtime "$INVOCATION_TIME" \
+       --arg iteration "$iter_num" \
+       --arg timestamp "$MASTER_TIMESTAMP" \
+       --arg host "$(hostname)" \
+       --arg pod "$POD_NAME" \
+       '. + {
+        invocation_time_s: ($invtime | tonumber),
+        iteration: ($iteration | tonumber),
         cold_start: false,
-        language: \"java\",
-        master_timestamp: \"$MASTER_TIMESTAMP\",
-        hostname: \"$(hostname)\",
-        pod_name: \"$POD_NAME\"
-    }" "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
-    mv "$TMP_FILE" "$RESULT_FILE"
-
-    log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
-
-    if [ $i -lt $ITERATIONS ]; then
+        language: "java",
+        master_timestamp: $timestamp,
+        hostname: $host,
+        pod_name: $pod
+    }' "$RESULT_FILE" > "$TMP_FILE" 2>/dev/null
+    
+    if [ -f "$TMP_FILE" ]; then
+        mv "$TMP_FILE" "$RESULT_FILE"
+        log "✓ Invocation time: ${INVOCATION_TIME}s - Saved to: $RESULT_FILE"
+    else
+        log_error "Failed to add metadata to $RESULT_FILE"
+    fi
+    
+    if [ $iter_num -lt $ITERATIONS ]; then
         wait_with_countdown $HOT_START_ITERATION_WAIT "Waiting before next hot iteration (2 mins)..."
     fi
 done
 
-log "✓ Java Hot Start Complete"
+log "✓ Java Hot Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
 #############################################
 # FINAL SUMMARY
