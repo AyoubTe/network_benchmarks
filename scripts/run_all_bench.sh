@@ -136,18 +136,10 @@ for iter_num in $(seq 1 $ITERATIONS); do
     fi
 done
 
-echo "Wait 1 min before detroying the pod..."
-sleep 60
+echo "Wait 2 min before runnig the warm start test..."
+sleep 120
 
 log "✓ Python Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
-
-# Clean up pod
-POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchpython" | awk '{print $1}' | head -1)
-if [ -n "$POD_NAME" ]; then
-    kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0 2>&1 | tee -a "$LOG_FILE"
-fi
-
-wait_with_countdown $TEST_TRANSITION_WAIT "Transition period before next test (5 mins)..."
 
 #############################################
 # PYTHON HOT START
@@ -158,12 +150,6 @@ log "=========================================="
 
 OUTPUT_DIR="./results_python_hot"
 mkdir -p "$OUTPUT_DIR"
-
-# Warmup
-log_info "Warming up action..."
-wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
-sleep 120
-log_info "Waiting 2 mins after warming up..."
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchpython" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
@@ -278,15 +264,8 @@ done
 
 log "✓ JavaScript Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
-echo "Wait 1 min before detroying the pod..."
-sleep 60
-
-POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjs" | awk '{print $1}' | head -1)
-if [ -n "$POD_NAME" ]; then
-    kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0 2>&1 | tee -a "$LOG_FILE"
-fi
-
-wait_with_countdown $TEST_TRANSITION_WAIT "Transition period before next test (5 mins)..."
+echo "Wait 2 min before runnig the warm start test..."
+sleep 120
 
 #############################################
 # JAVASCRIPT HOT START
@@ -297,11 +276,6 @@ log "=========================================="
 
 OUTPUT_DIR="./results_javascript_hot"
 mkdir -p "$OUTPUT_DIR"
-
-log_info "Warming up action..."
-wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
-sleep 120
-log_info "Waiting 2 mins after warming up..."
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjs" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
@@ -415,15 +389,8 @@ done
 
 log "✓ Java Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
-echo "Wait 1 min before detroying the pod..."
-sleep 60
-
-POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
-if [ -n "$POD_NAME" ]; then
-    kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0 2>&1 | tee -a "$LOG_FILE"
-fi
-
-wait_with_countdown $TEST_TRANSITION_WAIT "Transition period before final test (5 mins)..."
+echo "Wait 2 min before runnig the warm start test..."
+sleep 120
 
 #############################################
 # JAVA HOT START
@@ -434,11 +401,6 @@ log "=========================================="
 
 OUTPUT_DIR="./results_java_hot"
 mkdir -p "$OUTPUT_DIR"
-
-log_info "Warming up action (JVM warmup)..."
-wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
-sleep 120
-log_info "Waiting 2 mins after warming up..."
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
