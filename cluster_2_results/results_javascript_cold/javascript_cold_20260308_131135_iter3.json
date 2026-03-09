@@ -1,0 +1,91 @@
+{
+  "benchmarks": {
+    "bandwidth": {
+      "avg_download_time_s": 7.997333333333334,
+      "bandwidth_mbps": 42.67431140224232,
+      "download_times_s": [
+        8.589,
+        7.831,
+        7.572
+      ],
+      "file_size_mb": 42.66,
+      "max_time_s": 8.589,
+      "metric": "bandwidth",
+      "min_time_s": 7.572,
+      "url": "https://hagimont.freeboxos.fr/hagimont/software/resteasy-jaxrs-3.0.9.Final-all.zip"
+    },
+    "dns_resolution": {
+      "avg_ms": 7.3,
+      "domain": "google.com",
+      "iterations": 10,
+      "latencies_ms": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        29,
+        35
+      ],
+      "max_ms": 35,
+      "median_ms": 1,
+      "metric": "dns_resolution",
+      "min_ms": 1
+    },
+    "http_latency": {
+      "avg_ms": 260,
+      "iterations": 10,
+      "latencies_ms": [
+        202,
+        210,
+        213,
+        213,
+        214,
+        219,
+        252,
+        270,
+        340,
+        467
+      ],
+      "max_ms": 467,
+      "median_ms": 219,
+      "metric": "http_latency",
+      "min_ms": 202,
+      "stdev_ms": 79.68186744799597,
+      "url": "http://httpbin.org/get"
+    },
+    "tcp_latency": {
+      "avg_ms": 8.5,
+      "host": "8.8.8.8",
+      "iterations": 10,
+      "latencies_ms": [
+        7,
+        7,
+        7,
+        8,
+        8,
+        8,
+        8,
+        8,
+        9,
+        15
+      ],
+      "max_ms": 15,
+      "median_ms": 8,
+      "metric": "tcp_latency",
+      "min_ms": 7,
+      "port": 53,
+      "stdev_ms": 2.247220505424423
+    }
+  },
+  "timestamp": 1772978521464,
+  "invocation_time_s": 49.774,
+  "iteration": 3,
+  "cold_start": true,
+  "language": "javascript",
+  "master_timestamp": "20260308_131135",
+  "hostname": "cluster2-master"
+}
