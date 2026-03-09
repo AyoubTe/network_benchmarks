@@ -1,0 +1,90 @@
+{
+  "benchmarks": {
+    "bandwidth": {
+      "avg_download_time_s": 7.515333333333333,
+      "bandwidth_mbps": 45.41125162612426,
+      "download_times_s": [
+        8.333,
+        7.119,
+        7.094
+      ],
+      "file_size_mb": 42.66,
+      "max_time_s": 8.333,
+      "metric": "bandwidth",
+      "min_time_s": 7.094,
+      "url": "https://hagimont.freeboxos.fr/hagimont/software/resteasy-jaxrs-3.0.9.Final-all.zip"
+    },
+    "dns_resolution": {
+      "avg_ms": 8.25,
+      "domain": "google.com",
+      "iterations": 10,
+      "latencies_ms": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        26,
+        34
+      ],
+      "max_ms": 34,
+      "median_ms": 1,
+      "metric": "dns_resolution",
+      "min_ms": 1
+    },
+    "http_latency": {
+      "avg_ms": 258.3,
+      "iterations": 10,
+      "latencies_ms": [
+        202,
+        204,
+        213,
+        218,
+        220,
+        235,
+        263,
+        299,
+        301,
+        428
+      ],
+      "max_ms": 428,
+      "median_ms": 235,
+      "metric": "http_latency",
+      "min_ms": 202,
+      "stdev_ms": 66.41091777712457,
+      "url": "http://httpbin.org/get"
+    },
+    "tcp_latency": {
+      "avg_ms": 7.3,
+      "host": "8.8.8.8",
+      "iterations": 10,
+      "latencies_ms": [
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        8,
+        8,
+        8
+      ],
+      "max_ms": 8,
+      "median_ms": 7,
+      "metric": "tcp_latency",
+      "min_ms": 7,
+      "port": 53,
+      "stdev_ms": 0.45825756949558405
+    }
+  },
+  "timestamp": 1772970342914,
+  "invocation_time_s": 25.425,
+  "iteration": 1,
+  "cold_start": false,
+  "language": "javascript",
+  "master_timestamp": "20260308_102915",
+  "hostname": "k8s-master",
+  "pod_name": "wskowdev-invoker-00-157-whisksystem-networkbenchjs"
+}

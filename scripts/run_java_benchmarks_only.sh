@@ -137,15 +137,8 @@ done
 
 log "✓ Java Cold Start Complete - $(ls -1 $OUTPUT_DIR/*.json 2>/dev/null | wc -l) files created"
 
-echo "Wait 2 mins before destroying the pod..."
+echo "Wait 2 mins starting the warm start test..."
 sleep 120
-
-POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
-if [ -n "$POD_NAME" ]; then
-    kubectl delete pod "$POD_NAME" -n openwhisk --force --grace-period=0 2>&1 | tee -a "$LOG_FILE"
-fi
-
-wait_with_countdown $TEST_TRANSITION_WAIT "Transition period before Java Hot Start test (5 mins)..."
 
 #############################################
 # JAVA HOT START
@@ -156,11 +149,6 @@ log "=========================================="
 
 OUTPUT_DIR="./results_java_hot"
 mkdir -p "$OUTPUT_DIR"
-
-log_info "Warming up action (JVM warmup)..."
-wsk -i action invoke "$ACTION_NAME" --result >/dev/null 2>&1
-sleep 120
-log_info "Warmup complete - waited 2 mins"
 
 POD_NAME=$(kubectl get pods -n openwhisk 2>/dev/null | grep "networkbenchjava" | awk '{print $1}' | head -1)
 log_info "Using pod: $POD_NAME"
